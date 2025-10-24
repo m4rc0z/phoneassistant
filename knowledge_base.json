@@ -1,0 +1,19 @@
+{
+  "problems": [
+    {
+      "id": "internet_down",
+      "keywords": ["internet", "no connection", "wifi down"],
+      "solution": "Haben Sie versucht, Ihren Router neu zu starten? Bitte trennen Sie ihn für 30 Sekunden vom Strom und schliessen Sie ihn dann wieder an."
+    },
+    {
+      "id": "password_reset",
+      "keywords": ["password", "forgot password", "reset password"],
+      "solution": "Sie können Ihr Passwort auf unserer Website unter 'Mein Konto' zurücksetzen. Wir können Ihnen auch einen Link zum Zurücksetzen per E-Mail zusenden."
+    },
+    {
+      "id": "billing_question",
+      "keywords": ["rechnung", "zahlung", "abbuchung"],
+      "solution": "Informationen zu Ihrer Rechnung finden Sie in Ihrem Online-Kundenkonto. Bei spezifischen Fragen zu einer Abbuchung, bleiben Sie bitte in der Leitung, um mit einem Mitarbeiter verbunden zu werden."
+    }
+  ]
+}

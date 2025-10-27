@@ -38,12 +38,18 @@ Erstellung eines MVP-Prototyps für ein Telefonsystem, das Anrufe entgegennimmt 
 - [x] **Schritt 7: Server starten und testen**
   - [x] Den Server gestartet und die Funktionalität mit einer Twilio-Testnummer getestet (manuell über `curl` und Dialogflow-Integration verifiziert).
   - [x] `DEPLOYMENT.md` mit detaillierten Anweisungen für das Setup und den Betrieb erstellt.
+  - [x] CORS in `index.js` aktiviert, um die Kommunikation mit `client.html` zu ermöglichen.
+  - [x] `client.html` erstellt, um Sprachinteraktion über den Browser zu ermöglichen.
+
+- [x] **Schritt 8: Google Cloud Text-to-Speech (TTS) Integration**
+  - [x] `@google-cloud/text-to-speech` installiert.
+  - [x] `index.js` an die TTS API angepasst, um Audiodaten (Base64-kodiert) an den Client zu senden.
+  - [x] `client.html` angepasst, um die empfangenen Audiodaten abzuspielen.
+  - [x] IAM-Berechtigungen für das Dienstkonto aktualisiert (Rolle "Cloud Text-to-Speech User").
 
 ## Nächste Schritte
 
-- [ ] **Schritt 8: Tests ausführen und verifizieren**
-  - [ ] Die neu erstellten Tests ausführen, um die aktuelle Funktionalität zu überprüfen.
-
-- [ ] **Schritt 9: Weitere Intents und Dialoge**
-  - [ ] Dialogflow-Intents für weitere Anfragen erstellen.
-  - [ ] Die Anwendungslogik erweitern, um diese Fälle zu behandeln.
+- [ ] **Schritt 9: TTS-Modus-Umschaltung implementieren**
+  - [ ] `client.html` um einen Toggle-Button erweitern, um zwischen Google Cloud TTS und Browser `SpeechSynthesis` zu wechseln.
+  - [ ] `client.html` anpassen, um einen Parameter an den Backend-Aufruf zu senden, der den gewünschten TTS-Modus angibt.
+  - [ ] `index.js` anpassen, um basierend auf diesem Parameter entweder Google Cloud TTS-Audio (JSON) oder TwiML (XML) zurückzugeben.

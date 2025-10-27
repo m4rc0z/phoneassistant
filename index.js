@@ -2,9 +2,12 @@ const express = require('express');
 const twilio = require('twilio');
 const fs = require('fs');
 const dialogflow = require('@google-cloud/dialogflow');
+const { TextToSpeechClient } = require('@google-cloud/text-to-speech'); // Import TTS Client
 
 const app = express();
 const port = 3000;
+
+const cors = require('cors');
 
 // Load the knowledge base
 const knowledgeBase = JSON.parse(fs.readFileSync('knowledge_base.json', 'utf8'));
@@ -18,8 +21,11 @@ const languageCode = 'de-DE';
 // Make sure to set the GOOGLE_APPLICATION_CREDENTIALS environment variable
 // to the path of your service account key file.
 const sessionClient = new dialogflow.SessionsClient();
+const ttsClient = new TextToSpeechClient(); // Initialize TTS Client
 
 app.use(express.urlencoded({ extended: true }));
+app.use(express.json()); // Add this to parse JSON bodies if needed, though not strictly for this flow
+app.use(cors()); // Enable CORS for all routes
 
 // Function to detect intent using Dialogflow ES
 async function detectIntent(query) {
@@ -33,14 +39,27 @@ async function detectIntent(query) {
     queryInput: {
       text: {
         text: query,
-        languageCode: languageCode,
+        languageCode: languageCode, // Added here
       },
     },
-    languageCode: languageCode,
+    languageCode: languageCode, // Also here
   };
 
   const [response] = await sessionClient.detectIntent(request);
   return response.queryResult;
+}
+
+// Function to synthesize speech using Google Cloud TTS
+async function synthesizeSpeech(text) {
+  const request = {
+    input: { text: text },
+    voice: { languageCode: 'de-DE', ssmlGender: 'NEUTRAL' }, // You can choose specific voices here
+    audioConfig: { audioEncoding: 'MP3' },
+  };
+
+  const [response] = await ttsClient.synthesizeSpeech(request);
+  // The audio content is a base64-encoded string
+  return response.audioContent.toString('base64');
 }
 
 app.post('/call', (req, res) => {
@@ -58,17 +77,25 @@ app.post('/call', (req, res) => {
 
 app.post('/handle-input', async (req, res) => {
   const speechResult = req.body.SpeechResult;
-  // For Dialogflow ES, we can use a fixed session ID for simplicity in this MVP
-  // In a real application, you might generate a unique session ID per call
+  const ttsMode = req.body.ttsMode; // Get TTS mode from client
   const currentSessionId = req.body.CallSid || sessionId; 
-  const twiml = new twilio.twiml.VoiceResponse();
+
+  let responseText = 'Es gab ein Problem bei der Verarbeitung Ihrer Anfrage. Bitte versuchen Sie es später noch einmal.';
 
   if (!speechResult) {
-    twiml.say('Ich habe Sie nicht verstanden. Bitte versuchen Sie es noch einmal.');
-    twiml.redirect('/call');
-    res.type('text/xml');
-    res.send(twiml.toString());
-    return;
+    responseText = 'Ich habe Sie nicht verstanden. Bitte versuchen Sie es noch einmal.';
+    if (ttsMode === 'browser') {
+      const twiml = new twilio.twiml.VoiceResponse();
+      twiml.say(responseText);
+      twiml.redirect('/call');
+      res.type('text/xml');
+      res.send(twiml.toString());
+      return;
+    } else {
+      const audioBase64 = await synthesizeSpeech(responseText);
+      res.json({ audio: audioBase64, text: responseText });
+      return;
+    }
   }
 
   try {
@@ -80,17 +107,33 @@ app.post('/handle-input', async (req, res) => {
     );
 
     if (foundProblem) {
-      twiml.say(foundProblem.solution);
+      responseText = foundProblem.solution;
     } else {
-      twiml.say('Ich konnte Ihr Problem leider nicht verstehen. Bitte bleiben Sie in der Leitung, um mit einem Mitarbeiter verbunden zu werden.');
+      responseText = 'Ich konnte Ihr Problem leider nicht verstehen. Bitte bleiben Sie in der Leitung, um mit einem Mitarbeiter verbunden zu werden.';
     }
-  } catch (error) {
-    console.error('Dialogflow detectIntent error:', error);
-    twiml.say('Es gab ein Problem bei der Verarbeitung Ihrer Anfrage. Bitte versuchen Sie es später noch einmal.');
-  }
 
-  res.type('text/xml');
-  res.send(twiml.toString());
+    if (ttsMode === 'browser') {
+      const twiml = new twilio.twiml.VoiceResponse();
+      twiml.say(responseText);
+      res.type('text/xml');
+      res.send(twiml.toString());
+    } else {
+      const audioBase64 = await synthesizeSpeech(responseText);
+      res.json({ audio: audioBase64, text: responseText });
+    }
+
+  } catch (error) {
+    console.error('Server error:', error);
+    if (ttsMode === 'browser') {
+      const twiml = new twilio.twiml.VoiceResponse();
+      twiml.say(responseText);
+      res.type('text/xml');
+      res.send(twiml.toString());
+    } else {
+      const audioBase64 = await synthesizeSpeech(responseText);
+      res.json({ audio: audioBase64, text: responseText });
+    }
+  }
 });
 
 app.listen(port, () => {

@@ -1,255 +1,155 @@
 <!DOCTYPE html>
-<html lang="de">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Telefon-Assistent Sprach-Client</title>
+    <title>Twilio Voice Client</title>
+    <script src="/node_modules/@twilio/voice-sdk/dist/twilio.min.js"></script>
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            min-height: 100vh;
-            background-color: #f4f4f4;
-            margin: 0;
-        }
-        .container {
-            background-color: #fff;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-            text-align: center;
-            max-width: 500px;
-            width: 90%;
-        }
-        button {
-            padding: 10px 20px;
-            font-size: 16px;
-            cursor: pointer;
-            border: none;
-            border-radius: 5px;
-            background-color: #007bff;
-            color: white;
-            margin: 10px 0;
-        }
-        button:hover {
-            background-color: #0056b3;
-        }
-        button:disabled {
-            background-color: #cccccc;
-            cursor: not-allowed;
-        }
-        #status {
-            margin-top: 20px;
-            font-weight: bold;
-            color: #333;
-        }
-        #transcript {
-            margin-top: 10px;
-            padding: 10px;
-            border: 1px solid #ddd;
-            border-radius: 5px;
-            min-height: 50px;
-            text-align: left;
-            background-color: #e9ecef;
-        }
-        #response {
-            margin-top: 10px;
-            padding: 10px;
-            border: 1px solid #ddd;
-            border-radius: 5px;
-            min-height: 50px;
-            text-align: left;
-            background-color: #d4edda;
-            color: #155724;
-        }
-        .tts-toggle {
-            margin-top: 15px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 10px;
-        }
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        #controls { margin-top: 20px; }
+        button { padding: 10px 20px; font-size: 16px; margin-right: 10px; }
+        #log { margin-top: 20px; border: 1px solid #ccc; padding: 10px; min-height: 100px; overflow-y: scroll; }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>Telefon-Assistent</h1>
-        <p>Klicken Sie auf den Knopf, um mit dem Assistenten zu sprechen.</p>
-        <button id="startButton">Start Sprechen</button>
-        <div class="tts-toggle">
-            <label for="ttsModeToggle">Aktiviere Google Cloud TTS (bessere Qualität)</label>
-            <input type="checkbox" id="ttsModeToggle" checked>
-        </div>
-        <div id="status">Bereit</div>
-        <div id="transcript"></div>
-        <div id="response"></div>
+    <h1>Twilio Voice Client</h1>
+    <div id="controls">
+        <button id="call-button">Call</button>
+        <button id="hangup-button" disabled>Hangup</button>
+        <p id="status">Connecting...</p>
     </div>
+    <div id="log"></div>
 
     <script>
-        const startButton = document.getElementById('startButton');
+        const callButton = document.getElementById('call-button');
+        const hangupButton = document.getElementById('hangup-button');
         const statusDiv = document.getElementById('status');
-        const transcriptDiv = document.getElementById('transcript');
-        const responseDiv = document.getElementById('response');
-        const ttsModeToggle = document.getElementById('ttsModeToggle');
+        const logDiv = document.getElementById('log');
 
-        let recognition;
-        let isListening = false;
-        const audioPlayer = new Audio();
+        let device;
+        let currentConnection;
+        let vadProcessor;
 
-        // Check for browser compatibility
-        if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-            statusDiv.textContent = 'Spracherkennung wird von Ihrem Browser nicht unterstützt. Bitte verwenden Sie Chrome.';
-            startButton.disabled = true;
-        } else {
-            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-            recognition = new SpeechRecognition();
-            recognition.continuous = false; // Listen for a single utterance
-            recognition.lang = 'de-DE';
-            recognition.interimResults = false;
-            recognition.maxAlternatives = 1;
-
-            recognition.onstart = () => {
-                isListening = true;
-                statusDiv.textContent = 'Zuhören...';
-                startButton.textContent = 'Stopp Sprechen';
-                transcriptDiv.textContent = '';
-                responseDiv.textContent = '';
-            };
-
-            recognition.onresult = (event) => {
-                const speechResult = event.results[0][0].transcript;
-                transcriptDiv.textContent = `Sie sagten: "${speechResult}"`;
-                statusDiv.textContent = 'Verarbeite Anfrage...';
-                sendToBackend(speechResult);
-            };
-
-            recognition.onerror = (event) => {
-                isListening = false;
-                statusDiv.textContent = `Fehler bei der Spracherkennung: ${event.error}`;
-                startButton.textContent = 'Start Sprechen';
-                console.error('Speech recognition error', event.error);
-            };
-
-            recognition.onend = () => {
-                if (isListening) { // Only update if not explicitly stopped by user
-                    isListening = false;
-                    statusDiv.textContent = 'Bereit';
-                    startButton.textContent = 'Start Sprechen';
-                }
-            };
-
-            startButton.addEventListener('click', () => {
-                if (isListening) {
-                    recognition.stop();
-                    isListening = false;
-                    statusDiv.textContent = 'Bereit';
-                    startButton.textContent = 'Start Sprechen';
-                } else {
-                    recognition.start();
-                }
-            });
+        function log(message) {
+            logDiv.innerHTML += `<p>${message}</p>`;
+            logDiv.scrollTop = logDiv.scrollHeight;
         }
 
-        async function sendToBackend(speechResult) {
-            try {
-                const callSid = 'web-client-' + Math.random().toString(36).substring(2, 15);
-                const selectedTtsMode = ttsModeToggle.checked ? 'cloud' : 'browser';
+        // VAD Implementation using Twilio's AudioProcessor and AudioWorklet
+        class VadAudioProcessor {
+            constructor() {
+                this.audioContext = null;
+                this.microphone = null;
+                this.vadNode = null;
+            }
 
-                const response = await fetch('http://localhost:3000/handle-input', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded',
-                    },
-                    body: `SpeechResult=${encodeURIComponent(speechResult)}&CallSid=${callSid}&ttsMode=${selectedTtsMode}`,
+            async createProcessedStream(stream) {
+                log('VAD Processor: Creating processed stream with AudioWorklet.');
+                this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                
+                try {
+                    await this.audioContext.audioWorklet.addModule('vad-processor.js');
+                } catch (e) {
+                    log(`Error loading VAD processor: ${e.message}`);
+                    return stream; // Return original stream if worklet fails
+                }
+
+                this.microphone = this.audioContext.createMediaStreamSource(stream);
+                this.vadNode = new AudioWorkletNode(this.audioContext, 'vad-processor');
+
+                this.vadNode.port.onmessage = (event) => {
+                    if (event.data.event === 'silence') {
+                        log('Client-side silence detected (Worklet). Ending turn.');
+                        fetch('/end-turn', { method: 'POST' });
+                    } else if (event.data.event === 'speechStart') {
+                        log('Speech detected (Worklet)...');
+                    }
+                };
+
+                this.microphone.connect(this.vadNode);
+
+                return stream;
+            }
+
+            async destroyProcessedStream(stream) {
+                log('VAD Processor: Destroying processed stream.');
+                if (this.vadNode) { 
+                    this.vadNode.port.postMessage({ type: 'close' });
+                    this.vadNode.disconnect();
+                }
+                if (this.microphone) this.microphone.disconnect();
+                if (this.audioContext) this.audioContext.close();
+            }
+        }
+
+        async function initializeAndConnect() {
+            log('Requesting Access Token...');
+            try {
+                const response = await fetch('/token');
+                const data = await response.json();
+                log('Got Access Token');
+
+                device = new Twilio.Device(data.token, {
+                    codecPreferences: ['opus', 'pcmu'],
                 });
 
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
+                vadProcessor = new VadAudioProcessor();
+                device.audio.addProcessor(vadProcessor);
 
-                if (selectedTtsMode === 'cloud') {
-                    const jsonResponse = await response.json();
-                    const audioBase64 = jsonResponse.audio;
-                    const responseText = jsonResponse.text; // Get text for display
+                log('Making call...');
+                currentConnection = await device.connect();
 
-                    if (audioBase64) {
-                        responseDiv.textContent = `Assistent sagt: "${responseText}"`;
-                        playAudio(audioBase64);
-                    } else {
-                        responseDiv.textContent = 'Keine Audio-Antwort erhalten.';
-                        statusDiv.textContent = 'Bereit';
-                        startButton.textContent = 'Start Sprechen';
-                    }
-                } else { // Browser TTS mode, expect TwiML
-                    const twimlText = await response.text();
-                    console.log('Received TwiML for browser TTS:', twimlText);
-                    parseAndSpeakTwiml(twimlText);
-                }
+                currentConnection.on('accept', (conn) => {
+                    statusDiv.textContent = 'In call';
+                    callButton.disabled = true;
+                    hangupButton.disabled = false;
+                    log('Successfully established call');
+                });
+
+                currentConnection.on('disconnect', () => {
+                    log('Call disconnected');
+                    if (vadProcessor) device.audio.removeProcessor(vadProcessor);
+                    statusDiv.textContent = 'Ready to make calls';
+                    callButton.disabled = false;
+                    hangupButton.disabled = true;
+                    if (device) device.destroy();
+                    currentConnection = null;
+                });
+
+                currentConnection.on('cancel', () => {
+                    log('Call canceled');
+                    if (vadProcessor) device.audio.removeProcessor(vadProcessor);
+                    statusDiv.textContent = 'Ready to make calls';
+                    callButton.disabled = false;
+                    hangupButton.disabled = true;
+                    if (device) device.destroy();
+                    currentConnection = null;
+                });
 
             } catch (error) {
-                console.error('Fehler beim Senden an das Backend:', error);
-                statusDiv.textContent = 'Fehler bei der Kommunikation mit dem Server.';
-                responseDiv.textContent = 'Es gab einen Fehler bei der Kommunikation mit dem Server.';
-                // No speech output here, as the server might not have sent audio or browser TTS might fail
+                log('Could not get Access Token or make call: ' + error.message);
+                statusDiv.textContent = 'Error making call';
             }
         }
 
-        function playAudio(base64String) {
-            audioPlayer.src = `data:audio/mp3;base64,${base64String}`;
-            audioPlayer.play();
-            audioPlayer.onended = () => {
-                statusDiv.textContent = 'Bereit';
-                startButton.textContent = 'Start Sprechen';
-            };
-            audioPlayer.onerror = (e) => {
-                console.error('Audio playback error:', e);
-                statusDiv.textContent = 'Fehler bei der Audiowiedergabe.';
-                responseDiv.textContent = 'Fehler bei der Audiowiedergabe.';
-            };
-        }
+        // Call button handler
+        callButton.addEventListener('click', () => {
+            initializeAndConnect();
+        });
 
-        function parseAndSpeakTwiml(twimlText) {
-            const parser = new DOMParser();
-            const xmlDoc = parser.parseFromString(twimlText, "text/xml");
-            const sayElement = xmlDoc.querySelector('Say');
-            const redirectElement = xmlDoc.querySelector('Redirect');
-
-            let textToSpeak = 'Es gab ein Problem mit der Antwort des Assistenten.';
-
-            if (sayElement) {
-                textToSpeak = sayElement.textContent;
-            } else if (redirectElement) {
-                textToSpeak = 'Ich habe Sie nicht verstanden. Bitte versuchen Sie es noch einmal.';
+        // Hangup button handler
+        hangupButton.addEventListener('click', () => {
+            log('Hanging up...');
+            if (currentConnection) {
+                currentConnection.disconnect();
             }
+        });
 
-            responseDiv.textContent = `Assistent sagt: "${textToSpeak}"`;
-            speakResponseBrowser(textToSpeak);
-        }
+        // Initial UI state
+        statusDiv.textContent = 'Ready to make calls';
+        callButton.disabled = false;
+        hangupButton.disabled = true;
+        log('Twilio Voice Client initialized.');
 
-        function speakResponseBrowser(text) {
-            const SpeechSynthesisUtterance = window.SpeechSynthesisUtterance;
-            const synth = window.speechSynthesis;
-
-            if (!synth) {
-                console.warn('Text-to-Speech wird von Ihrem Browser nicht unterstützt.');
-                return;
-            }
-
-            const utterance = new SpeechSynthesisUtterance(text);
-            utterance.lang = 'de-DE';
-            utterance.onend = () => {
-                statusDiv.textContent = 'Bereit';
-                startButton.textContent = 'Start Sprechen';
-            };
-            utterance.onerror = (event) => {
-                console.error('SpeechSynthesisUtterance.onerror', event);
-                statusDiv.textContent = 'Fehler bei der Sprachausgabe.';
-            };
-            synth.speak(utterance);
-        }
     </script>
 </body>
 </html>

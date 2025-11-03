@@ -52,3 +52,14 @@ Anrufer <--> Twilio <--> WebSocket <--> server.js <--> Dialogflow API
 ## Begründung der Architektur
 
 Diese Architektur wurde gewählt, um die Latenz zu minimieren. Anstatt das Audio zuerst selbst in Text umzuwandeln (STT) und diesen dann an Dialogflow zu senden, wird der rohe Audio-Stream direkt an Dialogflow übergeben. Dialogflow nutzt intern optimierte STT-Modelle, was zu einer deutlich geringeren "End-to-End"-Latenz führt und eine flüssigere Konversation ermöglicht.
+
+## Konfiguration
+
+### Text-to-Speech-Qualität
+
+Die Qualität der Text-to-Speech-Stimme kann über die Umgebungsvariable `TTS_QUALITY` gesteuert werden:
+
+*   `TTS_QUALITY=high` (Standard): Verwendet eine hochwertige, neuronale Stimme (`de-DE-Neural2-F`). Dies ist teurer.
+*   `TTS_QUALITY=low`: Verwendet eine Standardstimme (`de-DE-Standard-F`). Dies ist kostengünstiger und für Tests empfohlen.
+
+Wenn die Variable nicht gesetzt ist, wird standardmäßig die `low` Qualität verwendet.

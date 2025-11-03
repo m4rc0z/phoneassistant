@@ -16,7 +16,7 @@ const fromPhoneNumber = process.env.TWILIO_PHONE_NUMBER;
 
 // URL, die Twilio abruft, wenn der Anruf entgegengenommen wird
 // Dies sollte auf deinen Webhook zeigen, der TwiML zurückgibt
-const url = `https://<your-ngrok-url>/twilio-webhook`;
+const url = `https://bubblingly-zaniest-yusuf.ngrok-free.dev/twilio-webhook`;
 
 client.calls.create({
     to: toPhoneNumber,

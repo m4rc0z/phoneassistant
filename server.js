@@ -339,56 +339,57 @@ wss.on('connection', (ws, req) => {
     }
 
     ws.on('message', async message => {
-        const msg = JSON.parse(message);
-        // console.log('Eingehende WebSocket-Nachricht:', JSON.stringify(msg, null, 2));
+        try {
+            const msg = JSON.parse(message);
+            // console.log('Eingehende WebSocket-Nachricht:', JSON.stringify(msg, null, 2));
 
-        switch (msg.event) {
-            case 'connected':
-                console.log('Twilio Media Stream: Connected Event empfangen.');
-                break;
-            case 'start':
-                console.log('Twilio Media Stream: Start Event empfangen.');
-                console.log('Start-Nachricht Details:', JSON.stringify(msg.start, null, 2));
-                streamSid = msg.start.streamSid; // Capture the streamSid
-                console.log(`Stream SID captured: ${streamSid}`);
-                try {
-                    await sendWelcomeMessage(); // Send welcome message
-                } catch (error) {
-                    console.error('Fehler beim Senden der Willkommensnachricht nach Start-Event:', error);
-                }
-                break;
-            case 'media':
-                // console.log('Twilio Media Stream: Media Event empfangen.'); // Sehr gesprächig, daher auskommentiert
-                if (!currentActiveStream) {
-                    console.log('Erstes Medienereignis empfangen, starte neuen Dialogflow-Turn...');
-                    startTurn();
-                }
+            switch (msg.event) {
+                case 'connected':
+                    console.log('Twilio Media Stream: Connected Event empfangen.');
+                    break;
+                case 'start':
+                    console.log('Twilio Media Stream: Start Event empfangen.');
+                    console.log('Start-Nachricht Details:', JSON.stringify(msg.start, null, 2));
+                    streamSid = msg.start.streamSid; // Capture the streamSid
+                    console.log(`Stream SID captured: ${streamSid}`);
+                    try {
+                        await sendWelcomeMessage(); // Send welcome message
+                    } catch (error) {
+                        console.error('Fehler beim Senden der Willkommensnachricht nach Start-Event:', error);
+                    }
+                    break;
+                case 'media':
+                    // console.log('Twilio Media Stream: Media Event empfangen.'); // Sehr gesprächig, daher auskommentiert
+                    if (!currentActiveStream) {
+                        console.log('Erstes Medienereignis empfangen, starte neuen Dialogflow-Turn...');
+                        startTurn();
+                    }
 
-                if (currentActiveStream && detectStream) {
-                    const audio = Buffer.from(msg.media.payload, 'base64');
-                    detectStream.write({ inputAudio: audio });
-                }
-                break;
-            case 'stop':
-                console.log('Twilio Media Stream: Stop Event empfangen.');
-                console.log('Stop-Nachricht Details:', JSON.stringify(msg.stop, null, 2));
-                endTurn();
-                break;
-            case 'endOfStream':
-                console.log('Twilio Media Stream: End of Stream Event empfangen.');
-                endTurn();
-                break;
-            case 'force_fallback':
-                console.log('Twilio Media Stream: Force Fallback Event empfangen.');
-                handleFallback(streamSid, sessionId);
-                break;
-            case 'mark':
-                console.log('Twilio Media Stream: Mark Event empfangen.');
-                console.log('Mark-Nachricht Details:', JSON.stringify(msg.mark, null, 2));
-                break;
-            default:
-                console.log('Unbekanntes WebSocket-Event empfangen:', msg.event);
-                break;
+                    if (currentActiveStream && detectStream) {
+                        const audio = Buffer.from(msg.media.payload, 'base64');
+                        detectStream.write({ inputAudio: audio });
+                    }
+                    break;
+                case 'stop':
+                    console.log('Twilio Media Stream: Stop Event empfangen.');
+                    console.log('Stop-Nachricht Details:', JSON.stringify(msg.stop, null, 2));
+                    endTurn();
+                    break;
+                case 'endOfStream':
+                    console.log('Twilio Media Stream: End of Stream Event empfangen.');
+                    endTurn();
+                    break;
+                case 'mark':
+                    console.log('Twilio Media Stream: Mark Event empfangen.');
+                    console.log('Mark-Nachricht Details:', JSON.stringify(msg.mark, null, 2));
+                    break;
+                default:
+                    console.log('Unbekanntes WebSocket-Event empfangen:', msg.event);
+                    break;
+            }
+        } catch (error) {
+            console.error('Fehler beim Verarbeiten der WebSocket-Nachricht:', error);
+            ws.close(1002, 'Invalid JSON received'); // 1002: Protocol Error
         }
     });
 

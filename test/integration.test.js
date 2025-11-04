@@ -200,4 +200,82 @@ describe('Integration Test - Full Call Flow', () => {
             });
         });
     });
+
+    test('should handle malformed WebSocket messages gracefully', async () => {
+        await new Promise((resolve, reject) => {
+            const ws = new WebSocket('ws://localhost:3000/twilio-ws');
+
+            ws.on('open', () => {
+                console.log('Malformed Message Test: WebSocket connection opened.');
+                ws.send('this is not a json message'); // Send a non-JSON string
+            });
+
+            ws.on('message', message => {
+                // Server should not send any valid messages back for malformed input
+                console.log('Malformed Message Test: Received unexpected message:', message.toString());
+                reject(new Error('Received unexpected message from server'));
+            });
+
+            ws.on('close', () => {
+                console.log('Malformed Message Test: WebSocket connection closed gracefully.');
+                resolve(); // Connection closed, test passed
+            });
+
+            ws.on('error', error => {
+                console.error('Malformed Message Test: WebSocket error:', error);
+                reject(error);
+            });
+        });
+    });
+});
+
+describe('HTTP Endpoint Tests', () => {
+    beforeAll(done => {
+        server = http.createServer(app);
+        server.on('upgrade', (request, socket, head) => {
+            if (request.url === '/twilio-ws') {
+                wss.handleUpgrade(request, socket, head, ws => {
+                    wss.emit('connection', ws, request);
+                });
+            } else {
+                socket.destroy();
+            }
+        });
+        server.listen(3000, done);
+    });
+
+    afterAll(done => {
+        console.log('Closing server...');
+        wss.clients.forEach(client => client.close());
+        server.close(done);
+    });
+
+    test('POST /twilio-webhook should return TwiML with Stream', async () => {
+        const response = await request(server)
+            .post('/twilio-webhook')
+            .set('host', 'localhost:3000') // Simulate Twilio sending host header
+            .send({}); // Twilio webhook typically sends an empty body or form data
+
+        expect(response.status).toBe(200);
+        expect(response.headers['content-type']).toMatch(/text\/xml/);
+        expect(response.text).toContain('<Response>');
+        expect(response.text).toContain('<Connect>');
+        expect(response.text).toContain('<Stream url="wss://localhost:3000/twilio-ws" />');
+        expect(response.text).toContain('</Connect>');
+        expect(response.text).toContain('</Response>');
+    });
+
+    test('GET /token should return a valid Twilio Access Token', async () => {
+        // Twilio requires TWILIO_ACCOUNT_SID, TWILIO_API_KEY_SID, TWILIO_API_KEY_SECRET
+        // These are set as environment variables in the test script.
+
+        const response = await request(server)
+            .get('/token');
+
+        expect(response.status).toBe(200);
+        expect(response.headers['content-type']).toMatch(/application\/json/);
+        expect(response.body.token).toBeDefined();
+        expect(typeof response.body.token).toBe('string');
+        expect(response.body.token.length).toBeGreaterThan(0);
+    });
 });

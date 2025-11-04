@@ -4,7 +4,7 @@
   "description": "A simple phone assistant for booking appointments.",
   "main": "index.js",
   "scripts": {
-    "test": "export GOOGLE_APPLICATION_CREDENTIALS='./credentials.json' && jest",
+    "test": "export GOOGLE_APPLICATION_CREDENTIALS='./credentials.json' && export TWILIO_ACCOUNT_SID='ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxx' && export TWILIO_API_KEY_SID='SKxxxxxxxxxxxxxxxxxxxxxxxxxxxxx' && export TWILIO_API_KEY_SECRET='xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx' && jest",
     "start": "export GOOGLE_APPLICATION_CREDENTIALS='./credentials.json' && node server.js"
   },
   "dependencies": {
